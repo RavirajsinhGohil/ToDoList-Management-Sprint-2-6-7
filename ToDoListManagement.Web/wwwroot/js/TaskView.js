@@ -3,58 +3,7 @@ var startDateValidation = "";
 var endDateValidation = "";
 var startDateValidationEdit = "";
 var endDateValidationEdit = "";
-// $(document).ready(function () {
-//     initSortable();
 
-// if (selectedProjectId) {
-//     $("#sprintDropDown").prop("disabled", false);
-//     $("#addSprintButton").prop("disabled", false);
-//     $("#addTaskButton").prop("disabled", false);
-// }
-
-// if (selectedSprintId) {
-//     $("#sprintDropDown").prop("disabled", false);
-//     loadTeamMembers(selectedProjectId);
-//     loadSprints(selectedProjectId);
-//     GetTasksBySprintId(selectedSprintId);
-// }
-
-// $("#projectDropDown").change(function () {
-//     selectedProjectId = $(this).val();
-//     selectedSprintId = null;
-//     if (selectedProjectId) {
-//         $("#addSprintButton").prop("disabled", false);
-//         loadTeamMembers(selectedProjectId);
-//         loadSprints(selectedProjectId);
-//         loadBacklogTasks(selectedProjectId);
-//         GetTasksBySprintId(selectedSprintId);
-//         $("#sprintDropDown").prop("disabled", false);
-//         $("#addTaskButton").prop("disabled", false);
-//     } else {
-//         $(".card-body").empty();
-//         $("#backlogContainer").empty();
-//         $("#assignedToMeCheck").prop("disabled", true);
-//         $("#addTaskButton").prop("disabled", true);
-//         $("#teamMembersDropDown").prop("disabled", true);
-//         $("#sprintDropDown").prop("disabled", true);
-//         $("#addSprintButton").prop("disabled", true);
-//         $("#addTaskButton").prop("disabled", true);
-//         $("#sprintDropDown").val("");
-//         $("#teamMembersDropDown").val("");
-//         selectedSprintId = null;
-//     }
-// });
-
-// $("#addTaskModal").on('hidden.bs.modal', function () {
-//     $("#addTaskForm").trigger("reset");
-//     $("#addTaskForm").find(".text-danger").text("");
-// });
-
-// $("#addSprintModal").on('hidden.bs.modal', function () {
-//     $("#addSprintForm").trigger("reset");
-//     $("#addSprintForm").find(".text-danger").text("");
-// });
-// });
 let viewModel;
 $(document).ready(function () {
     viewModel = new TaskViewModel();
@@ -62,7 +11,6 @@ $(document).ready(function () {
     viewModel.loadProjects();
 
     initSortable();
-    // Keep your SignalR and modal logic as-is
 
     if (selectedProjectId) {
         viewModel.selectedProjectId(selectedProjectId);
@@ -82,31 +30,12 @@ $(document).ready(function () {
     });
 });
 
-
 function loadBacklogTasks(projectId) {
     ajaxCall('/Tasks/GetBacklogTasks', 'GET', JSON.stringify({ projectId: projectId }), function (html) {
         $("#backlogContainer").empty();
         $("#backlogContainer").append(html);
     });
 }
-
-// function changeSprint(sprintId) {
-//     $("#addSprintButton").prop("disabled", false);
-//     selectedSprintId = sprintId;
-//     $("#sprintDropDown").val(sprintId);
-//     $("#sprintControls").empty();
-//     if (selectedSprintId) {
-//         $("#assignedToMeCheck").prop("disabled", false);
-//         $("#teamMembersDropDown").prop("disabled", false);
-//         GetTasksBySprintId(selectedSprintId);
-//         GetSprintById(selectedSprintId);
-//     }
-//     else {
-//         $(".card-body").empty();
-//         $("#assignedToMeCheck").prop("disabled", true);
-//         $("#teamMembersDropDown").prop("disabled", true);
-//     }
-// }
 
 function GetSprintById(sprintId) {
     ajaxCall('/Tasks/GetSprintById', 'GET', JSON.stringify({ sprintId: sprintId }), function (response) {
@@ -130,7 +59,7 @@ function GetSprintById(sprintId) {
             else if (response.status == "Completed") {
                 $("#sprintControls").append(`
                     <div class="d-flex justify-content-between">
-                        <div class="badge badge-success">Completed</div>
+                        <button class="btn btn-secondary" disabled>Complete Sprint</button>
                     </div>
                 `);
             }
@@ -139,8 +68,33 @@ function GetSprintById(sprintId) {
                     <span >Duration: ${response.duration} days</span>
                 </div>
             `);
+
+            if (response && response.startDate && response.endDate) {
+                renderSprintProgressBar(response.startDate, response.endDate);
+            }
+        }
+        else {
+            $("#sprintControls").empty();
+            $("#sprintDuration").empty();
+            $("#sprintProgressBar").css("width", "0%");
+            $("#sprintProgressRemaining").text("");
         }
     });
+}
+
+function renderSprintProgressBar(startDate, endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const now = new Date();
+
+    const total = (end - start) / (1000 * 60 * 60 * 24);
+    const passed = (now - start) / (1000 * 60 * 60 * 24);
+    const remaining = Math.max(0, Math.ceil(total - passed));
+
+    const percent = Math.min(100, Math.max(0, (passed / total) * 100)).toFixed(1);
+
+    $("#sprintProgressRemaining").text(`${remaining} days remaining`);
+    $("#sprintProgressBar").css("width", `${percent}%`);
 }
 
 const connection = new signalR.HubConnectionBuilder()
@@ -177,15 +131,6 @@ function sendMessage() {
     connection.invoke("SendMessage", user, message).catch(err => console.error(err.toString()));
 }
 
-// function GetTasksBySprintId(selectedSprintId, userId) {
-//     const data = JSON.stringify({ sprintId: selectedSprintId, userId: userId || 0 });
-
-//     ajaxCall('/Tasks/GetTasksBySprintId', 'GET', data, function (html) {
-//         $("#taskListContainer").empty().append(html);
-//         initSortable();
-//     });
-// }
-
 function initSortable() {
     $(".task-column").sortable({
         connectWith: ".task-column",
@@ -196,7 +141,6 @@ function initSortable() {
             const oldStatus = ui.sender.data("status");
             const newStatus = $(this).data("status");
 
-            // Define allowed transitions
             const allowedTransitions = {
                 "To Do": ["In Progress"],
                 "In Progress": ["To Do", "Testing"],
@@ -214,6 +158,8 @@ function initSortable() {
                     toastr.success(response.message);
                 } else {
                     toastr.error(response.message);
+                    $(ui.sender).sortable('cancel');
+                    return;
                 }
             });
         }
@@ -266,6 +212,44 @@ function openAddTaskModal() {
     });
 }
 
+$(document).on('submit', '#addTaskForm', function (e) {
+    e.preventDefault();
+    
+    const form = this;
+
+    if (!$(form).valid()) {
+        return false;
+    }
+
+    const formData = new FormData(form);
+
+    const selectedProjectId = viewModel.selectedProjectId();
+
+    ajaxCall('/Tasks/AddTask', 'POST', '{}',
+        function (response) {
+            if (response.success) {
+                $('#addTaskModal').modal('hide');
+                toastr.success(response.message);
+
+                if (selectedProjectId) {
+                    loadBacklogTasks(selectedProjectId);
+                }
+                if (viewModel.selectedSprintId()) {
+                    viewModel.loadTasks();
+                    GetSprintById(viewModel.selectedSprintId());
+                }
+            } else {
+                toastr.error(response.message);
+            }
+        },
+        {
+            data: formData,
+            contentType: false,
+            processData: false
+        }
+    );
+});
+
 function openAddTaskInputFile() {
     const fileUpload = $("#addTaskInputFile");
     fileUpload.click();
@@ -287,14 +271,7 @@ function openEditTaskModal(taskId) {
 
         startDateValidationEdit = startDateInputEdit.attr('min');
         endDateValidationEdit = startDateInputEdit.attr('max');
-
-        if (!window.TaskPermissions.canAddEdit) {
-            $("#editTaskUpload").prop("disabled", true);
-            $("#editTaskForm")
-                .find("input, select, textarea, button[type='submit']")
-                .attr("disabled", true);
-        }
-
+        
         $.validator.unobtrusive.parse("#editTaskForm");
 
         tinymce.init({
@@ -339,6 +316,46 @@ function openEditTaskModal(taskId) {
         });
     });
 }
+
+$(document).on('submit', '#editTaskForm', function (e) {
+    e.preventDefault();
+    
+    const form = this;
+
+    if (!$(form).valid()) {
+        return false;
+    }
+
+    const formData = new FormData(form);
+
+    const selectedProjectId = viewModel.selectedProjectId();
+    const selectedSprintId = viewModel.selectedSprintId();
+
+    ajaxCall('/Tasks/UpdateTask', 'POST', '{}',
+        function (response) {
+            if (response.success) {
+                $('#editTaskModal').modal('hide');
+                toastr.success(response.message);
+
+                if (selectedProjectId) {
+                    loadBacklogTasks(selectedProjectId);
+                }
+                if (selectedSprintId) {
+                    viewModel.loadTasks();
+                    GetSprintById(viewModel.selectedSprintId());
+                }
+            }
+            else {
+                toastr.error(response.message);
+            }
+        },
+        {
+            data: formData,
+            contentType: false,
+            processData: false
+        }
+    );
+});
 
 function openDeleteTaskModal(taskId) {
     $("#deleteTaskModal").modal('show');
@@ -400,110 +417,12 @@ $(document).on('change', '#editTaskInputFile', function () {
     }
 });
 
-$(document).on('change', '#addTaskStartDate', function () {
-    const fromDate = $(this).val();
-    if (fromDate) {
-        $("#addTaskDueDate").attr("min", fromDate);
-    } else {
-        $("#addTaskDueDate").attr("min", startDateValidation);
-    }
-});
-
-$(document).on('change', '#addTaskDueDate', function () {
-    const toDate = $(this).val();
-    if (toDate) {
-        $("#addTaskStartDate").attr("max", toDate);
-    } else {
-        $("#addTaskStartDate").attr("max", endDateValidation);
-    }
-});
-
-$(document).on('change', '#editTaskStartDate', function () {
-    var fromDate = $(this).val();
-    if (fromDate) {
-        $("#editTaskDueDate").attr("min", fromDate);
-    } else {
-        $("#editTaskDueDate").attr("min", startDateValidationEdit);
-    }
-});
-
-$(document).on('change', '#editTaskDueDate', function () {
-    var toDate = $(this).val();
-    if (toDate) {
-        $("#editTaskStartDate").attr("max", toDate);
-    } else {
-        $("#editTaskStartDate").attr("max", endDateValidationEdit);
-    }
-});
-
-// $("#assignedToMeCheck").on('change', function () {
-//     const isChecked = $(this).is(':checked');
-//     if (isChecked) {
-//         GetTasksBySprintId(selectedSprintId, $(this).data("user-id"));
-//         $("#teamMembersDropDown").prop('disabled', true);
-//         $("#teamMembersDropDown").val($(this).data("user-id"));
-//     }
-//     else {
-//         GetTasksBySprintId(selectedSprintId);
-//         $("#teamMembersDropDown").prop('disabled', false);
-//         $("#teamMembersDropDown").val("");
-//     }
-// });
-
-// $("#teamMembersDropDown").on('change', function () {
-//     const selectedUserId = $(this).val();
-//     if (selectedUserId) {
-//         if (selectedUserId == userId) {
-//             $("#assignedToMeCheck").prop("checked", true);
-//         }
-//         else {
-//             $("#assignedToMeCheck").prop("checked", false);
-//         }
-//         GetTasksBySprintId(selectedSprintId, selectedUserId);
-//     } else {
-//         GetTasksBySprintId(selectedSprintId);
-//         $("#assignedToMeCheck").prop("checked", false);
-//     }
-// });
-
-// function loadTeamMembers(projectId) {
-//     ajaxCall('/Tasks/GetTeamMembersJson', 'GET', JSON.stringify({ projectId: projectId }), function (response) {
-//         const dropdown = $("#teamMembersDropDown");
-//         dropdown.empty();
-//         dropdown.append('<option value="">Select a Team Member</option>');
-//         response.forEach(member => {
-//             dropdown.append(`<option value="${member.userId}">${member.name}</option>`);
-//         });
-//     });
-// }
-
-// function loadSprints(projectId) {
-//     ajaxCall('/Tasks/GetSprintsJson', 'GET', JSON.stringify({ projectId: projectId }), function (response) {
-//         const dropdown = $("#sprintDropDown");
-//         dropdown.empty();
-//         dropdown.append('<option value="">Select a Sprint</option>');
-//         $("#sprintControls").empty();
-
-//         response.forEach(sprint => {
-//             const startDate = new Date(sprint.startDate);
-//             const endDate = new Date(sprint.endDate);
-//             const duration = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
-
-//             if (sprint.status === "In Progress") {
-//                 dropdown.append(`<option value="${sprint.sprintId}" selected>${sprint.name}</option>`);
-//                 changeSprint(sprint.sprintId);
-//             } else {
-//                 dropdown.append(`<option value="${sprint.sprintId}">${sprint.name}</option>`);
-//             }
-//         });
-//     });
-// }
-
 function startSprint(sprintId) {
     ajaxCall('/Tasks/StartSprint', 'POST', JSON.stringify({ sprintId: sprintId }), function (response) {
         if (response.success) {
             toastr.success(response.message);
-            changeSprint(sprintId);
+            viewModel.selectedSprintId(sprintId);
+            GetSprintById(sprintId);
         } else {
             toastr.error(response.message);
         }
@@ -514,7 +433,8 @@ function completeSprint(sprintId) {
     ajaxCall('/Tasks/CompleteSprint', 'POST', JSON.stringify({ sprintId: sprintId }), function (response) {
         if (response.success) {
             toastr.success(response.message);
-            changeSprint(sprintId);
+            viewModel.selectedSprintId(sprintId);
+            GetSprintById(sprintId);
         } else {
             toastr.error(response.message);
         }
@@ -567,7 +487,6 @@ function TaskViewModel() {
 
     // Observables subscriptions
     self.selectedProjectId.subscribe(function (newVal) {
-        debugger;
         if (newVal) {
             self.loadSprints();
             self.loadTeamMembers();
@@ -587,6 +506,7 @@ function TaskViewModel() {
         if (newSprintId) {
             GetSprintById(newSprintId);
         } else {
+            GetSprintById(null);
             $("#sprintControls").empty();
             $("#sprintDuration").empty();
         }

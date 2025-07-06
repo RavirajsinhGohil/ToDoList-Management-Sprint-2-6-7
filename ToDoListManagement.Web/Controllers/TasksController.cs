@@ -28,18 +28,11 @@ public class TasksController : BaseController
 
     [CustomAuthorize("Task Board", "CanView")]
     [HttpGet]
-    public async Task<IActionResult> Index(int? projectId)
+    public async Task<IActionResult> Index()
     {
         if (SessionUser != null)
         {
             ProjectTasksViewModel model = await _taskService.GetProjectNamesAsync(SessionUser);
-            model.ProjectId = projectId ?? 0;
-            if (model.ProjectId != 0)
-            {
-                model.BacklogTasks = await _taskService.GetBacklogTasksByProjectIdAsync(model.ProjectId);
-                model.Sprints = await _sprintService.GetAllSprints(model.ProjectId);
-                model.TeamMembers = await _taskService.GetTeamMembersAsync(model.ProjectId);
-            }
             return View(model);
         }
         return RedirectToAction("Login", "Auth");
@@ -55,7 +48,7 @@ public class TasksController : BaseController
 
     [CustomAuthorize("Task Board", "CanView")]
     [HttpGet]
-    public async Task<IActionResult> GetTasksBySprintId(int sprintId, int userId )
+    public async Task<IActionResult> GetTasksBySprintId(int sprintId, int userId)
     {
         List<TaskViewModel>? tasks = await _taskService.GetTasksBySprintIdAsync(sprintId, userId);
         return PartialView("_TasksList", tasks ?? []);
@@ -121,20 +114,11 @@ public class TasksController : BaseController
         if (SessionUser?.UserId == null)
         {
             TempData["ErrorMessage"] = Constants.InvalidSessionMessage;
-            return RedirectToAction("Index", new { projectId = model.ProjectId });
+            return Json(new { success = false, message = Constants.InvalidSessionMessage });
         }
 
         bool isAdded = await _taskService.AddTaskAsync(model, SessionUser);
-        if (isAdded)
-        {
-            TempData["SuccessMessage"] = Constants.TaskAddedMessage;
-            await _hubContext.Clients.All.SendAsync("NewTaskAdded");
-        }
-        else
-        {
-            TempData["ErrorMessage"] = Constants.TaskAddFailedMessage;
-        }
-        return RedirectToAction("Index", new { projectId = model.ProjectId });
+        return Json(new { success = isAdded, message = isAdded ? Constants.TaskAddedMessage : Constants.TaskAddFailedMessage });
     }
 
     [CustomAuthorize("Task Board", "CanAddEdit")]
@@ -165,20 +149,11 @@ public class TasksController : BaseController
         if (SessionUser?.UserId == null)
         {
             TempData["ErrorMessage"] = Constants.InvalidSessionMessage;
-            return RedirectToAction("Index", new { projectId = model.ProjectId });
+            return Json(new { success = false, message = Constants.InvalidSessionMessage });
         }
 
         bool isUpdated = await _taskService.UpdateTaskAsync(model, SessionUser.UserId);
-        if (isUpdated)
-        {
-            TempData["SuccessMessage"] = Constants.TaskUpdatedMessage;
-            await _hubContext.Clients.All.SendAsync("TaskUpdated");
-        }
-        else
-        {
-            TempData["ErrorMessage"] = Constants.TaskUpdateFailedMessage;
-        }
-        return RedirectToAction("Index", new { projectId = model.ProjectId });
+        return Json(new { success = isUpdated, message = isUpdated ? Constants.TaskUpdatedMessage : Constants.TaskUpdateFailedMessage });
     }
 
     [CustomAuthorize("Task Board", "CanDelete")]
@@ -227,7 +202,7 @@ public class TasksController : BaseController
     public async Task<IActionResult> AddSprint(SprintViewModel model)
     {
         bool isAdded = await _sprintService.AddSprintAsync(model);
-        if(isAdded)
+        if (isAdded)
         {
             TempData["SuccessMessage"] = Constants.SprintAddedMessage;
         }
@@ -238,13 +213,15 @@ public class TasksController : BaseController
         return RedirectToAction("Index", new { model.ProjectId });
     }
 
+    [CustomAuthorize("Task Board", "CanView")]
+    [HttpGet]
     public async Task<IActionResult> GetBacklogTasks(int projectId)
     {
         List<TaskViewModel>? tasks = await _taskService.GetBacklogTasksByProjectIdAsync(projectId);
         return PartialView("_BacklogTasks", tasks);
     }
 
-    [CustomAuthorize("Task Board", "CanAddEdit")]
+    [CustomAuthorize("Task Board", "CanView")]
     [HttpGet]
     public async Task<IActionResult> GetSprintById(int sprintId)
     {

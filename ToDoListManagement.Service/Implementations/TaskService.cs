@@ -122,6 +122,17 @@ public class TaskService : ITaskService
         if (model.SprintId != null && task.Status == "Not Started")
         {
             task.Status = "To Do";
+            Sprint? sprint = await _sprintRepository.GetByIdAsync(model.SprintId.Value);
+            if (sprint != null)
+            {
+                sprint.Status = "In Progress";
+                await _sprintRepository.UpdateAsync(sprint);
+            }
+            else
+            {
+                task.CreatedOn = null;
+                task.DueDate = null;
+            }
         }
         else
         {

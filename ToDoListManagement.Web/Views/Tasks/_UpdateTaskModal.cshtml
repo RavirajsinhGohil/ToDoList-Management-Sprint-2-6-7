@@ -13,7 +13,7 @@
 
 <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content">
-        <form id="editTaskForm" asp-controller="Tasks" asp-action="UpdateTask" method="post"
+        <form id="editTaskForm" method="post"
             enctype="multipart/form-data">
             <input type="hidden" value="@Model.ProjectId" asp-for="ProjectId">
             <input type="hidden" asp-for="TaskId" />
